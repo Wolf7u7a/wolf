@@ -11,90 +11,90 @@ if ($ExecutionContext.SessionState.LanguageMode -ne "FullLanguage") {
 # Configuración de seguridad
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Tls13
 
+# Función para extraer el nombre del archivo desde la URL
+function Get-FileNameFromUrl {
+    param([string]$url)
+    
+    $uri = New-Object System.Uri($url)
+    $fileName = [System.IO.Path]::GetFileName($uri.LocalPath)  # Extrae el nombre del archivo de la URL
+    return $fileName
+}
+
 # Configuración personalizable
 $config = @{
-    DownloadPath = "$env:TEMP\DescargasApps"
-    MaxRetries = 2
+    DownloadPath = [System.IO.Path]::Combine($env:USERPROFILE, "Downloads\DescargasApps")  # Cambio en la ruta
+    MaxRetries = 3
     Downloads = @(
-        @{Name = "Office"; URL = "https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=es-es&version=O16GA"; FileName = "OfficeSetup.exe"},
-        @{Name = "Photoshop"; URL = "https://store8.gofile.io/download/web/4afdf269-c6d4-4652-bcb9-15ef56772dfb/AP2025.v26.0.x64.ZDescargasORG.rar"; FileName = "prueba"},
-        @{Name = "Activador Office"; ID = "GD_ACT_OFFICE_ID"; FileName = "ActivadorOffice.exe"},
-        @{Name = "Activador Photoshop"; ID = "GD_ACT_PHOTOSHOP_ID"; FileName = "ActivadorPhotoshop.exe"}
+        @{Name = "Office"; URL = "https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=es-es&version=O16GA"},
+        @{Name = "Photoshop"; URL = "https://store8.gofile.io/download/web/4afdf269-c6d4-4652-bcb9-15ef56772dfb/AP2025.v26.0.x64.ZDescargasORG.rar"}
     )
-    ActivationHashes = @{
-        MAS_AIO = '16F0FFCDD242A0D514B9D96AE1535F48A2E2811D45A8094E98BB0A26EA2FEBBA'
+}
+
+# Función para verificar si la URL es válida
+function IsValidUrl {
+    param([string]$url)
+    try {
+        $uri = New-Object System.Uri($url)
+        return $uri.Scheme -in @('http', 'https')
+    }
+    catch {
+        return $false
     }
 }
 
-# Inicialización de entorno
-if (-not (Test-Path $config.DownloadPath)) {
-    New-Item -Path $config.DownloadPath -ItemType Directory | Out-Null
-}
-
-# Función mejorada de descarga para manejar archivos grandes de Google Drive y Gofile
+# Función de descarga mejorada
 function Download-File {
     param(
-        [string]$URL,
-        [string]$FileName
+        [string]$URL
     )
     
+    # Obtener el nombre del archivo automáticamente desde la URL
+    $FileName = Get-FileNameFromUrl -url $URL
     $output = Join-Path $config.DownloadPath $FileName
+    $retryDelay = 5  # Tiempo de espera inicial entre reintentos
     
     try {
+        # Verificar si la URL es válida
+        if (-not (IsValidUrl $URL)) {
+            Write-Host "La URL proporcionada no es válida." -ForegroundColor Red
+            return $false
+        }
+
         for ($i = 0; $i -le $config.MaxRetries; $i++) {
             try {
                 Write-Host "`nDescargando $FileName..." -ForegroundColor Cyan
                 $ProgressPreference = 'SilentlyContinue'
                 
-                # Verificar si el archivo ya existe
-                if (Test-Path $output) {
-                    Write-Host "El archivo ya existe en $output. Saliendo..." -ForegroundColor Yellow
-                    return $true
+                # Mostrar barra de progreso
+                $totalSize = 0
+                $response = Invoke-WebRequest -Uri $URL -Method Head -UseBasicParsing
+                $totalSize = $response.Headers['Content-Length']
+                $progress = 0
+
+                $response = Invoke-WebRequest -Uri $URL -OutFile $output -UseBasicParsing
+
+                # Actualizar barra de progreso
+                while ($progress -lt 100) {
+                    $progress = (Get-Item $output).Length / $totalSize * 100
+                    Write-Progress -PercentComplete $progress -Status "Descargando..." -Activity "$FileName"
+                    Start-Sleep -Seconds 1
                 }
-                
-                # Manejo especial para Google Drive (archivo grande)
-                if ($URL -match "drive\.google\.com") {
-                    # Realizar la solicitud inicial
-                    $response = Invoke-WebRequest -Uri $URL -SessionVariable session -UseBasicParsing
-                    $headers = $response.Headers
-                    
-                    # Verificar si se necesita la confirmación para archivos grandes
-                    if ($headers['Content-Disposition'] -match 'filename=".*"') {
-                        Write-Host "Descargando directamente desde Google Drive..." -ForegroundColor Cyan
-                        Invoke-WebRequest -Uri $URL -WebSession $session -UseBasicParsing -OutFile $output
-                    } else {
-                        # Obtener el enlace de confirmación para archivos grandes
-                        $confirmURL = ($response.Links | Where-Object { $_.outerHTML -match "confirm=" }).href
-                        if ($confirmURL) {
-                            Write-Host "Confirmación requerida en Google Drive, obteniendo enlace..." -ForegroundColor Cyan
-                            Invoke-WebRequest -Uri $confirmURL -WebSession $session -UseBasicParsing -OutFile $output
-                        } else {
-                            Write-Host "No se pudo obtener el enlace de confirmación de Google Drive." -ForegroundColor Red
-                        }
-                    }
-                } 
-                # Manejo para Gofile (y otros enlaces directos)
-                elseif ($URL -match "gofile\.io") {
-                    Write-Host "Descargando directamente desde Gofile..." -ForegroundColor Cyan
-                    Invoke-WebRequest -Uri $URL -UseBasicParsing -OutFile $output
-                }
-                else {
-                    # Si no es Google Drive ni Gofile, proceder con la descarga estándar
-                    Invoke-WebRequest -Uri $URL -UseBasicParsing -OutFile $output
-                }
-                
-                # Verificar si el archivo se descargó correctamente
-                if (Test-Path $output) {
-                    Write-Host "Descarga exitosa: $output" -ForegroundColor Green
-                    return $true
-                } else {
-                    Write-Host "La descarga falló, el archivo no se encuentra." -ForegroundColor Red
-                }
+
+                Write-Host "Descarga exitosa: $output" -ForegroundColor Green
+                return $true
             }
             catch {
-                Write-Host "Intento $($i+1) fallido: $($_.Exception.Message)" -ForegroundColor Yellow
+                Write-Host "Intento $($i+1) fallido, esperando $($retryDelay) segundos antes de reintentar..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $retryDelay
+                $retryDelay *= 2  # Aumentar el tiempo de espera (exponencial)
             }
         }
+        return $false
+    }
+    catch {
+        Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Tipo de error: $($_.Exception.GetType().FullName)" -ForegroundColor Red
+        Write-Host "Rastro de pila: $($_.Exception.StackTrace)" -ForegroundColor Red
         return $false
     }
     finally {
@@ -111,9 +111,7 @@ function Show-AdvancedMenu {
     for ($i = 0; $i -lt $config.Downloads.Count; $i++) {
         Write-Host "$($i+1). Descargar $($config.Downloads[$i].Name)"
     }
-    Write-Host "$($config.Downloads.Count+1). Activar Windows/Office"
-    Write-Host "$($config.Downloads.Count+2). Abrir carpeta de descargas"
-    Write-Host "$($config.Downloads.Count+3). Salir"
+    Write-Host "$($config.Downloads.Count+1). Salir"
     Write-Host "════════════════════════════════════`n" -ForegroundColor Magenta
 }
 
@@ -125,31 +123,19 @@ while ($true) {
     switch ($selection) {
         "1" {
             $office = $config.Downloads | Where-Object { $_.Name -eq "Office" }
-            if (Download-File -URL $office.URL -FileName $office.FileName) {
+            if (Download-File -URL $office.URL) {
                 Write-Host "`n¿Desea abrir la carpeta? (S/N)" -ForegroundColor Cyan
                 if ((Read-Host) -eq 'S') { Invoke-Item $config.DownloadPath }
             }
         }
         "2" {
             $photoshop = $config.Downloads | Where-Object { $_.Name -eq "Photoshop" }
-            if (Download-File -URL $photoshop.URL -FileName $photoshop.FileName) {
+            if (Download-File -URL $photoshop.URL) {
                 Write-Host "`n¿Desea abrir la carpeta? (S/N)" -ForegroundColor Cyan
                 if ((Read-Host) -eq 'S') { Invoke-Item $config.DownloadPath }
             }
         }
         "3" {
-            # Lógica para Activador Office
-        }
-        "4" {
-            # Lógica para Activador Photoshop
-        }
-        "5" {
-            # Lógica para activación
-        }
-        "6" {
-            Invoke-Item $config.DownloadPath
-        }
-        "7" {
             exit
         }
         default {
@@ -160,6 +146,3 @@ while ($true) {
     Write-Host "`nPresione Enter para continuar..."
     [Console]::ReadLine()
 }
-
-# Abrir cmd al finalizar
-Start-Process cmd.exe
