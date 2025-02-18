@@ -11,22 +11,13 @@ if ($ExecutionContext.SessionState.LanguageMode -ne "FullLanguage") {
 # Configuración de seguridad
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Tls13
 
-# Función para extraer el nombre del archivo desde la URL
-function Get-FileNameFromUrl {
-    param([string]$url)
-    
-    $uri = New-Object System.Uri($url)
-    $fileName = [System.IO.Path]::GetFileName($uri.LocalPath)  # Extrae el nombre del archivo de la URL
-    return $fileName
-}
-
 # Configuración personalizable
 $config = @{
     DownloadPath = [System.IO.Path]::Combine($env:USERPROFILE, "Downloads\DescargasApps")  # Cambio en la ruta
     MaxRetries = 3
     Downloads = @(
-        @{Name = "Office"; URL = "https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=es-es&version=O16GA"},
-        @{Name = "Photoshop"; URL = "https://store8.gofile.io/download/web/4afdf269-c6d4-4652-bcb9-15ef56772dfb/AP2025.v26.0.x64.ZDescargasORG.rar"}
+        @{Name = "Office"; URL = "https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=es-es&version=O16GA"; FileName = "OfficeSetup.exe"},
+        @{Name = "Photoshop"; URL = "https://store8.gofile.io/download/web/4afdf269-c6d4-4652-bcb9-15ef56772dfb/AP2025.v26.0.x64.ZDescargasORG.rar"; FileName = "AP2025.v26.0.x64.ZDescargasORG.rar"}
     )
 }
 
@@ -40,6 +31,12 @@ function IsValidUrl {
     catch {
         return $false
     }
+}
+
+# Función para obtener el nombre del archivo automáticamente desde la URL
+function Get-FileNameFromUrl {
+    param([string]$url)
+    return [System.IO.Path]::GetFileName($url)
 }
 
 # Función de descarga mejorada
@@ -65,13 +62,19 @@ function Download-File {
                 Write-Host "`nDescargando $FileName..." -ForegroundColor Cyan
                 $ProgressPreference = 'SilentlyContinue'
                 
+                # Configuración de cabeceras HTTP para simular un navegador
+                $headers = @{
+                    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                }
+                
                 # Mostrar barra de progreso
                 $totalSize = 0
-                $response = Invoke-WebRequest -Uri $URL -Method Head -UseBasicParsing
+                $response = Invoke-WebRequest -Uri $URL -Method Head -Headers $headers -UseBasicParsing
                 $totalSize = $response.Headers['Content-Length']
                 $progress = 0
 
-                $response = Invoke-WebRequest -Uri $URL -OutFile $output -UseBasicParsing
+                # Intento de descarga
+                $response = Invoke-WebRequest -Uri $URL -OutFile $output -Headers $headers -UseBasicParsing
 
                 # Actualizar barra de progreso
                 while ($progress -lt 100) {
