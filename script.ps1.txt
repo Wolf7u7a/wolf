@@ -1,0 +1,100 @@
+# Verificación de modo de lenguaje
+if ($ExecutionContext.SessionState.LanguageMode -ne "FullLanguage") {
+    Write-Host "`n[ERROR] PowerShell no está en modo Full Language" -ForegroundColor Red
+    Write-Host "Este script requiere permisos elevados y modo no restringido."
+    Write-Host "Solución: Ejecutar como Administrador y revisar políticas de ejecución"
+    Write-Host "Más información: https://massgrave.dev/fix_powershell`n" -ForegroundColor Cyan
+    pause
+    exit
+}
+
+# Configuración de seguridad
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Tls13
+
+# Configuración personalizable
+$config = @{
+    DownloadPath = "$env:TEMP\DescargasApps"
+    MaxRetries = 2
+    Downloads = @(
+        @{Name = "Office"; URL = "https://drive.google.com/uc?export=download&id=1LPC0uoeZCXT8WvDCXn2VY6Hg33L9Fu8G"; FileName = "Office.zip"},
+        @{Name = "Photoshop"; ID = "14SRV3iWN9K3D-DX938fVYnXZ3NdOCBV9"; FileName = "Photoshop.zip"},
+        @{Name = "Activador Office"; ID = "GD_ACT_OFFICE_ID"; FileName = "ActivadorOffice.exe"},
+        @{Name = "Activador Photoshop"; ID = "GD_ACT_PHOTOSHOP_ID"; FileName = "ActivadorPhotoshop.exe"}
+    )
+    ActivationHashes = @{
+        MAS_AIO = '16F0FFCDD242A0D514B9D96AE1535F48A2E2811D45A8094E98BB0A26EA2FEBBA'
+    }
+}
+
+# Inicialización de entorno
+if (-not (Test-Path $config.DownloadPath)) {
+    New-Item -Path $config.DownloadPath -ItemType Directory | Out-Null
+}
+
+# Función de descarga mejorada
+function Download-File {
+    param(
+        [string]$URL,
+        [string]$FileName
+    )
+    
+    $output = Join-Path $config.DownloadPath $FileName
+    
+    try {
+        for ($i = 0; $i -le $config.MaxRetries; $i++) {
+            try {
+                Write-Host "`nDescargando $FileName..." -ForegroundColor Cyan
+                $ProgressPreference = 'SilentlyContinue'
+                
+                # Manejo especial para Google Drive
+                if ($URL -match "drive\.google\.com") {
+                    $tempCookie = "$env:TEMP\google_cookie.txt"
+                    Invoke-WebRequest -Uri $URL -SessionVariable session -UseBasicParsing -OutFile $output
+                    
+                    # Manejo de confirmación para archivos grandes
+                    if ($session.ResponseHeaders['Content-Type'] -eq 'text/html') {
+                        $confirmURL = ($session.Response.Content | Select-String -Pattern 'href="([^"]+)"' -AllMatches).Matches.Groups[1].Value
+                        Invoke-WebRequest -Uri $confirmURL -WebSession $session -UseBasicParsing -OutFile $output
+                    }
+                } else {
+                    Invoke-WebRequest -Uri $URL -UseBasicParsing -OutFile $output
+                }
+                
+                if (Test-Path $output) {
+                    Write-Host "Descarga exitosa: $output" -ForegroundColor Green
+                    return $true
+                }
+            }
+            catch {
+                Write-Host "Intento $($i+1) fallido: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+        return $false
+    }
+    finally {
+        $ProgressPreference = 'Continue'
+        if (Test-Path $tempCookie) { Remove-Item $tempCookie -Force }
+    }
+}
+
+# Resto del script (menú y funciones de activación) se mantienen igual...
+
+# Bucle principal
+while ($true) {
+    Show-AdvancedMenu
+    $selection = Read-Host "Seleccione una opción"
+    
+    switch ($selection) {
+        "1" {
+            $office = $config.Downloads | Where-Object { $_.Name -eq "Office" }
+            if (Download-File -URL $office.URL -FileName $office.FileName) {
+                Write-Host "`n¿Desea abrir la carpeta? (S/N)" -ForegroundColor Cyan
+                if ((Read-Host) -eq 'S') { Invoke-Item $config.DownloadPath }
+            }
+        }
+        # ... (resto de las opciones se mantienen igual)
+    }
+    
+    Write-Host "`nPresione Enter para continuar..."
+    [Console]::ReadLine()
+}
