@@ -16,7 +16,7 @@ $config = @{
     DownloadPath = "$env:TEMP\DescargasApps"
     MaxRetries = 2
     Downloads = @(
-        @{Name = "Office"; URL = "https://drive.google.com/uc?export=download&id=1EVm2IT_4lkfeyvqxANg-jLbpOyqdBSwe"; FileName = "exm1.zip"},
+        @{Name = "Office"; URL = "https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=es-es&version=O16GA"; FileName = "OfficeSetup.exe"},
         @{Name = "Photoshop"; ID = "16NDQjfFl2Mmt2TrrN0kApjEEc2Mtld6F"; FileName = "Photoshop.zip"},
         @{Name = "Activador Office"; ID = "GD_ACT_OFFICE_ID"; FileName = "ActivadorOffice.exe"},
         @{Name = "Activador Photoshop"; ID = "GD_ACT_PHOTOSHOP_ID"; FileName = "ActivadorPhotoshop.exe"}
