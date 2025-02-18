@@ -17,7 +17,7 @@ $config = @{
     MaxRetries = 2
     Downloads = @(
         @{Name = "Office"; URL = "https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=es-es&version=O16GA"; FileName = "OfficeSetup.exe"},
-        @{Name = "Photoshop"; URL = "https://store8.gofile.io/download/web/4afdf269-c6d4-4652-bcb9-15ef56772dfb/AP2025.v26.0.x64.ZDescargasORG.rar"; FileName = "AP2025.v26.0.x64.ZDescargasORG"},
+        @{Name = "Photoshop"; URL = "https://drive.google.com/uc?export=download&id=1fC48E_kas2tW3D0xAB_XpmcaSFDLSHLu"; FileName = "AP2025.v26.0.x64.ZDescargasORG"},
         @{Name = "Activador Office"; ID = "GD_ACT_OFFICE_ID"; FileName = "ActivadorOffice.exe"},
         @{Name = "Activador Photoshop"; ID = "GD_ACT_PHOTOSHOP_ID"; FileName = "ActivadorPhotoshop.exe"}
     )
@@ -31,7 +31,7 @@ if (-not (Test-Path $config.DownloadPath)) {
     New-Item -Path $config.DownloadPath -ItemType Directory | Out-Null
 }
 
-# Función de descarga mejorada
+# Función mejorada de descarga para manejar archivos grandes de Google Drive
 function Download-File {
     param(
         [string]$URL,
@@ -46,24 +46,43 @@ function Download-File {
                 Write-Host "`nDescargando $FileName..." -ForegroundColor Cyan
                 $ProgressPreference = 'SilentlyContinue'
                 
-                # Manejo especial para Google Drive
+                # Verificar si el archivo ya existe
+                if (Test-Path $output) {
+                    Write-Host "El archivo ya existe en $output. Saliendo..." -ForegroundColor Yellow
+                    return $true
+                }
+                
+                # Manejo especial para Google Drive (archivo grande)
                 if ($URL -match "drive\.google\.com") {
+                    # Realizar la solicitud inicial
                     $response = Invoke-WebRequest -Uri $URL -SessionVariable session -UseBasicParsing
+                    $headers = $response.Headers
                     
-                    # Si es un archivo grande, obtener el link de confirmación
-                    if ($response.Headers['Content-Disposition'] -match 'filename=".*"') {
+                    # Verificar si se necesita la confirmación para archivos grandes
+                    if ($headers['Content-Disposition'] -match 'filename=".*"') {
+                        Write-Host "Descargando directamente..." -ForegroundColor Cyan
                         Invoke-WebRequest -Uri $URL -WebSession $session -UseBasicParsing -OutFile $output
                     } else {
-                        $confirmURL = ($response.Links | Where-Object outerHTML -Match "confirm=").href
-                        Invoke-WebRequest -Uri $confirmURL -WebSession $session -UseBasicParsing -OutFile $output
+                        # Obtener el enlace de confirmación para archivos grandes
+                        $confirmURL = ($response.Links | Where-Object { $_.outerHTML -match "confirm=" }).href
+                        if ($confirmURL) {
+                            Write-Host "Confirmación requerida, obteniendo enlace..." -ForegroundColor Cyan
+                            Invoke-WebRequest -Uri $confirmURL -WebSession $session -UseBasicParsing -OutFile $output
+                        } else {
+                            Write-Host "No se pudo obtener el enlace de confirmación." -ForegroundColor Red
+                        }
                     }
                 } else {
+                    # Si no es Google Drive, proceder con la descarga estándar
                     Invoke-WebRequest -Uri $URL -UseBasicParsing -OutFile $output
                 }
                 
+                # Verificar si el archivo se descargó correctamente
                 if (Test-Path $output) {
                     Write-Host "Descarga exitosa: $output" -ForegroundColor Green
                     return $true
+                } else {
+                    Write-Host "La descarga falló, el archivo no se encuentra." -ForegroundColor Red
                 }
             }
             catch {
