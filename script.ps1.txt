@@ -17,7 +17,7 @@ $config = @{
     MaxRetries = 2
     Downloads = @(
         @{Name = "Office"; URL = "https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=es-es&version=O16GA"; FileName = "OfficeSetup.exe"},
-        @{Name = "Photoshop"; URL = "https://drive.google.com/uc?export=download&id=1fC48E_kas2tW3D0xAB_XpmcaSFDLSHLu"; FileName = "AP2025.v26.0.x64.ZDescargasORG"},
+        @{Name = "Photoshop"; URL = "https://store8.gofile.io/download/web/4afdf269-c6d4-4652-bcb9-15ef56772dfb/AP2025.v26.0.x64.ZDescargasORG.rar"; FileName = "AP2025.v26.0.x64.ZDescargasORG.rar"},
         @{Name = "Activador Office"; ID = "GD_ACT_OFFICE_ID"; FileName = "ActivadorOffice.exe"},
         @{Name = "Activador Photoshop"; ID = "GD_ACT_PHOTOSHOP_ID"; FileName = "ActivadorPhotoshop.exe"}
     )
@@ -31,7 +31,7 @@ if (-not (Test-Path $config.DownloadPath)) {
     New-Item -Path $config.DownloadPath -ItemType Directory | Out-Null
 }
 
-# Función mejorada de descarga para manejar archivos grandes de Google Drive
+# Función mejorada de descarga para manejar archivos grandes de Google Drive y Gofile
 function Download-File {
     param(
         [string]$URL,
@@ -60,20 +60,26 @@ function Download-File {
                     
                     # Verificar si se necesita la confirmación para archivos grandes
                     if ($headers['Content-Disposition'] -match 'filename=".*"') {
-                        Write-Host "Descargando directamente..." -ForegroundColor Cyan
+                        Write-Host "Descargando directamente desde Google Drive..." -ForegroundColor Cyan
                         Invoke-WebRequest -Uri $URL -WebSession $session -UseBasicParsing -OutFile $output
                     } else {
                         # Obtener el enlace de confirmación para archivos grandes
                         $confirmURL = ($response.Links | Where-Object { $_.outerHTML -match "confirm=" }).href
                         if ($confirmURL) {
-                            Write-Host "Confirmación requerida, obteniendo enlace..." -ForegroundColor Cyan
+                            Write-Host "Confirmación requerida en Google Drive, obteniendo enlace..." -ForegroundColor Cyan
                             Invoke-WebRequest -Uri $confirmURL -WebSession $session -UseBasicParsing -OutFile $output
                         } else {
-                            Write-Host "No se pudo obtener el enlace de confirmación." -ForegroundColor Red
+                            Write-Host "No se pudo obtener el enlace de confirmación de Google Drive." -ForegroundColor Red
                         }
                     }
-                } else {
-                    # Si no es Google Drive, proceder con la descarga estándar
+                } 
+                # Manejo para Gofile (y otros enlaces directos)
+                elseif ($URL -match "gofile\.io") {
+                    Write-Host "Descargando directamente desde Gofile..." -ForegroundColor Cyan
+                    Invoke-WebRequest -Uri $URL -UseBasicParsing -OutFile $output
+                }
+                else {
+                    # Si no es Google Drive ni Gofile, proceder con la descarga estándar
                     Invoke-WebRequest -Uri $URL -UseBasicParsing -OutFile $output
                 }
                 
@@ -125,7 +131,11 @@ while ($true) {
             }
         }
         "2" {
-            # Lógica para Photoshop
+            $photoshop = $config.Downloads | Where-Object { $_.Name -eq "Photoshop" }
+            if (Download-File -URL $photoshop.URL -FileName $photoshop.FileName) {
+                Write-Host "`n¿Desea abrir la carpeta? (S/N)" -ForegroundColor Cyan
+                if ((Read-Host) -eq 'S') { Invoke-Item $config.DownloadPath }
+            }
         }
         "3" {
             # Lógica para Activador Office
