@@ -16,7 +16,7 @@ $config = @{
     DownloadPath = "$env:TEMP\DescargasApps"
     MaxRetries = 2
     Downloads = @(
-        @{Name = "Office"; URL = "https://drive.google.com/uc?export=download&id=1LPC0uoeZCXT8WvDCXn2VY6Hg33L9Fu8G"; FileName = "Office.zip"},
+        @{Name = "Office"; URL = "https://drive.google.com/uc?export=download&id=1LPC0uoeZCXT8WvDCXn2VY6Hg33L9Fu8G"; FileName = "ckase4.html"},
         @{Name = "Photoshop"; ID = "GD_PHOTOSHOP_ID"; FileName = "Photoshop.zip"},
         @{Name = "Activador Office"; ID = "GD_ACT_OFFICE_ID"; FileName = "ActivadorOffice.exe"},
         @{Name = "Activador Photoshop"; ID = "GD_ACT_PHOTOSHOP_ID"; FileName = "ActivadorPhotoshop.exe"}
