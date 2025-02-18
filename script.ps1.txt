@@ -17,7 +17,7 @@ $config = @{
     MaxRetries = 2
     Downloads = @(
         @{Name = "Office"; URL = "https://drive.google.com/uc?export=download&id=1LPC0uoeZCXT8WvDCXn2VY6Hg33L9Fu8G"; FileName = "Office.zip"},
-        @{Name = "Photoshop"; ID = "14SRV3iWN9K3D-DX938fVYnXZ3NdOCBV9"; FileName = "Photoshop.zip"},
+        @{Name = "Photoshop"; ID = "GD_PHOTOSHOP_ID"; FileName = "Photoshop.zip"},
         @{Name = "Activador Office"; ID = "GD_ACT_OFFICE_ID"; FileName = "ActivadorOffice.exe"},
         @{Name = "Activador Photoshop"; ID = "GD_ACT_PHOTOSHOP_ID"; FileName = "ActivadorPhotoshop.exe"}
     )
@@ -48,12 +48,13 @@ function Download-File {
                 
                 # Manejo especial para Google Drive
                 if ($URL -match "drive\.google\.com") {
-                    $tempCookie = "$env:TEMP\google_cookie.txt"
-                    Invoke-WebRequest -Uri $URL -SessionVariable session -UseBasicParsing -OutFile $output
+                    $response = Invoke-WebRequest -Uri $URL -SessionVariable session -UseBasicParsing
                     
-                    # Manejo de confirmación para archivos grandes
-                    if ($session.ResponseHeaders['Content-Type'] -eq 'text/html') {
-                        $confirmURL = ($session.Response.Content | Select-String -Pattern 'href="([^"]+)"' -AllMatches).Matches.Groups[1].Value
+                    # Si es un archivo grande, obtener el link de confirmación
+                    if ($response.Headers['Content-Disposition'] -match 'filename=".*"') {
+                        Invoke-WebRequest -Uri $URL -WebSession $session -UseBasicParsing -OutFile $output
+                    } else {
+                        $confirmURL = ($response.Links | Where-Object outerHTML -Match "confirm=").href
                         Invoke-WebRequest -Uri $confirmURL -WebSession $session -UseBasicParsing -OutFile $output
                     }
                 } else {
@@ -73,11 +74,23 @@ function Download-File {
     }
     finally {
         $ProgressPreference = 'Continue'
-        if (Test-Path $tempCookie) { Remove-Item $tempCookie -Force }
     }
 }
 
-# Resto del script (menú y funciones de activación) se mantienen igual...
+# Menú interactivo
+function Show-AdvancedMenu {
+    Clear-Host
+    Write-Host "`n════════════════════════════════════" -ForegroundColor Magenta
+    Write-Host "        MENÚ PRINCIPAL v2.1" -ForegroundColor White
+    Write-Host "════════════════════════════════════" -ForegroundColor Magenta
+    for ($i = 0; $i -lt $config.Downloads.Count; $i++) {
+        Write-Host "$($i+1). Descargar $($config.Downloads[$i].Name)"
+    }
+    Write-Host "$($config.Downloads.Count+1). Activar Windows/Office"
+    Write-Host "$($config.Downloads.Count+2). Abrir carpeta de descargas"
+    Write-Host "$($config.Downloads.Count+3). Salir"
+    Write-Host "════════════════════════════════════`n" -ForegroundColor Magenta
+}
 
 # Bucle principal
 while ($true) {
@@ -92,7 +105,27 @@ while ($true) {
                 if ((Read-Host) -eq 'S') { Invoke-Item $config.DownloadPath }
             }
         }
-        # ... (resto de las opciones se mantienen igual)
+        "2" {
+            # Lógica para Photoshop
+        }
+        "3" {
+            # Lógica para Activador Office
+        }
+        "4" {
+            # Lógica para Activador Photoshop
+        }
+        "5" {
+            # Lógica para activación
+        }
+        "6" {
+            Invoke-Item $config.DownloadPath
+        }
+        "7" {
+            exit
+        }
+        default {
+            Write-Host "Opción inválida" -ForegroundColor Red
+        }
     }
     
     Write-Host "`nPresione Enter para continuar..."
