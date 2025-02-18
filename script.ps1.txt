@@ -131,3 +131,6 @@ while ($true) {
     Write-Host "`nPresione Enter para continuar..."
     [Console]::ReadLine()
 }
+
+# Abrir cmd al finalizar
+Start-Process cmd.exe
